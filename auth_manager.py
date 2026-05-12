@@ -1,5 +1,5 @@
 import bcrypt
-from database.db_manager import DatabaseManager
+from .db_manager import DatabaseManager
 from config import Config
 
 class AuthManager:
