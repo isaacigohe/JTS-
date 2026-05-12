@@ -1,22 +1,21 @@
-# config.py
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Config:
     # MongoDB Configuration
-    MONGO_URI = "mongodb+srv://isaacigohe120_db_user:crdSGNZijQo4K8bE@jit.9quiczw.mongodb.net/?appName=jit"
-    DB_NAME = "JTS_db"
+    MONGODB_URI = os.getenv('MONGODB_URI',"mongodb+srv://isaacigohe120_db_user:crdSGNZijQo4K8bE@jit.9quiczw.mongodb.net/?appName=jit")
+    DB_NAME = 'job_tracker_db'
     
     # Collections
-    USERS_COLLECTION = "users"
-    JOBS_COLLECTION = "jobs"
-    SAVED_JOBS_COLLECTION = "saved_jobs"
+    USERS_COLLECTION = 'users'
+    JOBS_COLLECTION = 'jobs'
+    SAVED_JOBS_COLLECTION = 'saved_jobs'
     
-    # RemoteOK API
-    REMOTEOK_URL = ""
+    # Security
+    SALT_ROUNDS = 12
     
-    # GUI Configuration
-    WINDOW_WIDTH = 1200
-    WINDOW_HEIGHT = 700
-    PRIMARY_COLOR = "#2C3E50"
-    SECONDARY_COLOR = "#3498DB"
-    ACCENT_COLOR = "#E74C3C"
+    # Application
+    APP_TITLE = "Job Listing Tracker System"
+    WINDOW_SIZE = "1200x700"
