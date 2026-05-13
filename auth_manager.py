@@ -1,43 +1,19 @@
 import bcrypt
-from db_manager import DatabaseManager
-from config import Config
+from database.db_manager import DBManager
 
 class AuthManager:
     def __init__(self):
-        self.db = DatabaseManager()
-    
-    def hash_password(self, password):
-        """Hash a password using bcrypt"""
-        salt = bcrypt.gensalt(rounds=Config.SALT_ROUNDS)
-        return bcrypt.hashpw(password.encode('utf-8'), salt)
-    
-    def verify_password(self, password, hashed):
-        """Verify a password against its hash"""
-        return bcrypt.checkpw(password.encode('utf-8'), hashed)
-    
+        self.db_manager = DBManager()
+        self.users_collection = self.db_manager.get_collection("users")
+
     def register_user(self, email, password):
-        """Register a new user"""
-        # Validation
-        if not email or '@' not in email:
-            raise ValueError("Invalid email address")
-        
-        if len(password) < 6:
-            raise ValueError("Password must be at least 6 characters")
-        
-        # Hash password and create user
-        hashed_pw = self.hash_password(password)
-        user_id = self.db.create_user(email, hashed_pw)
-        
-        return user_id
-    
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        user_data = {"email": email, "password": hashed_password.decode('utf-8')}
+        self.users_collection.insert_one(user_data)
+        return True
+
     def login_user(self, email, password):
-        """Authenticate a user"""
-        user = self.db.get_user_by_email(email)
-        
-        if not user:
-            raise ValueError("Invalid email or password")
-        
-        if not self.verify_password(password, user['password']):
-            raise ValueError("Invalid email or password")
-        
-        return user
+        user = self.users_collection.find_one({"email": email})
+        if user and bcrypt.checkpw(password.encode('utf-8'), user["password"].encode('utf-8')):
+            return user
+        return None
