@@ -1,5 +1,5 @@
-MONGO_URI = "mongodb+srv://isaacigohe120_db_user:crdSGNZijQo4K8bE@jit.9quiczw.mongodb.net/?appName=jit"
-DB_NAME = "Jts_db"
+MONGO_URI = "mongodb+srv://isaacigohe120_db_user:8BRCuZhwG9xKQZxn@cluster0.schebe7.mongodb.net/?appName=Cluster0"
+DB_NAME = "job_db"
 
 
 # Scraper settings
