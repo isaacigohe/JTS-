@@ -12,11 +12,12 @@ class MainWindow:
         self.master = master
         self.master.title("Job Listing Tracker System (JTS)")
         self.master.geometry("1000x700")
+        
         self.user = user
         self.db_manager = DBManager()
         self.jobs_collection = self.db_manager.get_collection("jobs")
         self.saved_jobs_collection = self.db_manager.get_collection("saved_jobs")
-
+        
         self.setup_ui()
         self.load_jobs()
 
@@ -24,37 +25,38 @@ class MainWindow:
         # Top Control Panel
         control_panel = tk.Frame(self.master)
         control_panel.pack(fill="x", padx=10, pady=10)
-
-        tk.Label(control_panel, text=f"Logged in as: {self.user['email']}", font=("Arial", 10, "bold")).pack(side="left")
         
+        tk.Label(control_panel, text=f"Logged in as: {self.user['email']}", font=("Arial", 10, "bold")).pack(side="left")
+                
         self.refresh_button = tk.Button(control_panel, text="Refresh Jobs", command=self.refresh_jobs)
         self.refresh_button.pack(side="right", padx=5)
-
+        
         self.search_entry = tk.Entry(control_panel)
         self.search_entry.pack(side="right", padx=5)
+        
         tk.Button(control_panel, text="Search", command=self.search_jobs).pack(side="right")
 
-        # Main Content Area (Treeview)
+    # Main Content Area (Treeview)
         self.tree = ttk.Treeview(self.master, columns=("Title", "Company", "Location", "Source", "Status"), show="headings")
         self.tree.heading("Title", text="Job Title")
         self.tree.heading("Company", text="Company")
         self.tree.heading("Location", text="Location")
         self.tree.heading("Source", text="Source")
         self.tree.heading("Status", text="Status")
-        
+                
         self.tree.column("Title", width=300)
         self.tree.column("Company", width=200)
         self.tree.column("Location", width=150)
         self.tree.column("Source", width=100)
         self.tree.column("Status", width=100)
-        
+                
         self.tree.pack(fill="both", expand=True, padx=10, pady=10)
         self.tree.bind("<Double-1>", self.on_item_double_click)
 
         # Bottom Action Panel
         action_panel = tk.Frame(self.master)
         action_panel.pack(fill="x", padx=10, pady=10)
-
+        
         tk.Button(action_panel, text="Save Job", command=self.save_job).pack(side="left", padx=5)
         tk.Button(action_panel, text="View Saved Jobs", command=self.view_saved_jobs).pack(side="left", padx=5)
         tk.Button(action_panel, text="Update Status", command=self.update_status).pack(side="left", padx=5)
@@ -63,12 +65,12 @@ class MainWindow:
     def load_jobs(self, query=None):
         for item in self.tree.get_children():
             self.tree.delete(item)
-        
+                
         if query:
             jobs = self.jobs_collection.find(query)
         else:
             jobs = self.jobs_collection.find().limit(100)
-
+            
         for job in jobs:
             self.tree.insert("", "end", iid=str(job["_id"]), values=(
                 job.get("title"),
@@ -94,9 +96,8 @@ class MainWindow:
                 all_jobs.extend(jobs)
             except Exception as e:
                 print(f"Error with {s.__class__.__name__}: {e}")
-        
+                
         if all_jobs:
-            # Clear old jobs and insert new ones
             self.jobs_collection.delete_many({})
             self.jobs_collection.insert_many(all_jobs)
             self.load_jobs()
@@ -121,12 +122,12 @@ class MainWindow:
         if not selected_item:
             messagebox.showwarning("Warning", "Please select a job to save.")
             return
-        
+                
         job_id = selected_item[0]
         if self.saved_jobs_collection.find_one({"user_id": self.user["_id"], "job_id": job_id}):
             messagebox.showinfo("Info", "Job already saved.")
             return
-
+            
         self.saved_jobs_collection.insert_one({
             "user_id": self.user["_id"],
             "job_id": job_id,
@@ -135,14 +136,13 @@ class MainWindow:
         messagebox.showinfo("Success", "Job saved successfully!")
 
     def view_saved_jobs(self):
-        # Filter tree to show only saved jobs
         saved_relations = self.saved_jobs_collection.find({"user_id": self.user["_id"]})
         saved_ids = [r["job_id"] for r in saved_relations]
-        
+                
         from bson.objectid import ObjectId
         query = {"_id": {"$in": [ObjectId(sid) for sid in saved_ids]}}
         self.load_jobs(query)
-        # Update status column in tree
+        
         for item in self.tree.get_children():
             rel = self.saved_jobs_collection.find_one({"user_id": self.user["_id"], "job_id": item})
             if rel:
@@ -153,13 +153,13 @@ class MainWindow:
         if not selected_item:
             messagebox.showwarning("Warning", "Please select a saved job.")
             return
-        
+                
         job_id = selected_item[0]
         rel = self.saved_jobs_collection.find_one({"user_id": self.user["_id"], "job_id": job_id})
         if not rel:
             messagebox.showwarning("Warning", "This job is not in your saved list.")
             return
-
+            
         new_status = "Applied" if rel["status"] == "Saved" else "Saved"
         self.saved_jobs_collection.update_one(
             {"_id": rel["_id"]},
@@ -172,7 +172,7 @@ class MainWindow:
         if not selected_item:
             messagebox.showwarning("Warning", "Please select a job to remove.")
             return
-        
+                
         job_id = selected_item[0]
         self.saved_jobs_collection.delete_one({"user_id": self.user["_id"], "job_id": job_id})
         self.tree.delete(job_id)
@@ -188,18 +188,42 @@ class MainWindow:
                 self.show_details(job)
 
     def show_details(self, job):
+        import webbrowser
+        import re
+        def clean_html(raw_html):
+            if not raw_html: return "No description available."
+            cleanr = re.compile('<.*?>')
+            cleantext = re.sub(cleanr, '', raw_html)
+            cleantext = cleantext.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&quot;', '"')
+            return cleantext.strip()
+            
         details_win = tk.Toplevel(self.master)
-        details_win.title(f"Details: {job['title']}")
-        details_win.geometry("600x500")
+        details_win.title(f"Job Details - {job['company']}")
+        details_win.geometry("700x600")
+        details_win.configure(bg="#f0f2f5")
         
-        tk.Label(details_win, text=job['title'], font=("Arial", 14, "bold")).pack(pady=10)
-        tk.Label(details_win, text=f"Company: {job['company']}").pack()
-        tk.Label(details_win, text=f"Location: {job['location']}").pack()
-        tk.Label(details_win, text=f"Salary: {job.get('salary', 'N/A')}").pack()
+        header = tk.Frame(details_win, bg="#ffffff", padx=20, pady=20)
+        header.pack(fill="x")
+        tk.Label(header, text=job['title'], font=("Helvetica", 18, "bold"), bg="#ffffff", fg="#1a73e8", wraplength=650, justify="left").pack(anchor="w")
+        tk.Label(header, text=job['company'], font=("Helvetica", 14), bg="#ffffff", fg="#5f6368").pack(anchor="w", pady=(5, 0))
+                
+        info_bar = tk.Frame(header, bg="#ffffff", pady=10)
+        info_bar.pack(fill="x")
+                
+        tk.Label(info_bar, text=f"📍 {job['location']}", font=("Helvetica", 10), bg="#ffffff", fg="#3c4043").pack(side="left", padx=(0, 20))
+        tk.Label(info_bar, text=f"💰 {job.get('salary', 'Not specified')}", font=("Helvetica", 10), bg="#ffffff", fg="#3c4043").pack(side="left")
         
-        desc_text = tk.Text(details_win, wrap="word", height=15)
-        desc_text.insert("1.0", job.get("description", "No description available."))
+        content_frame = tk.Frame(details_win, bg="#f0f2f5", padx=20, pady=20)
+        content_frame.pack(fill="both", expand=True)
+        tk.Label(content_frame, text="Job Description", font=("Helvetica", 12, "bold"), bg="#f0f2f5", fg="#202124").pack(anchor="w", pady=(0, 10))
+        
+        desc_text = tk.Text(content_frame, wrap="word", font=("Helvetica", 11), bg="#ffffff", padx=15, pady=15, relief="flat")
+        desc_text.insert("1.0", clean_html(job.get("description", "")))
         desc_text.config(state="disabled")
-        desc_text.pack(padx=10, pady=10, fill="both", expand=True)
+        desc_text.pack(fill="both", expand=True)
         
-        tk.Button(details_win, text="Close", command=details_win.destroy).pack(pady=10)
+        footer = tk.Frame(details_win, bg="#ffffff", padx=20, pady=15)
+        footer.pack(fill="x")
+        
+        tk.Button(footer, text="Apply Now", bg="#1a73e8", fg="white", font=("Helvetica", 10, "bold"), padx=20, pady=8, relief="flat", cursor="hand2", command=lambda: webbrowser.open(job.get('url', ''))).pack(side="right", padx=5)
+        tk.Button(footer, text="Close", font=("Helvetica", 10), padx=20, pady=8, command=details_win.destroy).pack(side="right")
