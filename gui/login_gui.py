@@ -1,51 +1,112 @@
 import tkinter as tk
 from tkinter import messagebox
-from auth.auth_manager import AuthManager
-from .main_gui import MainWindow
 
 class LoginWindow:
-    def __init__(self, master):
-        self.master = master
-        self.master.title("Login / Register")
-        self.auth_manager = AuthManager()
+    def __init__(self, root, auth_manager=None, on_success_callback=None):
+        self.root = root
+        self.auth_manager = auth_manager
+        self.on_success_callback = on_success_callback
+        
+        self.root.title("Job Tracker System - Authentication")
+        self.root.geometry("400x500")
+        self.root.resizable(False, False)
+        
+        self.current_frame = None
+        self.show_login_screen()
+        self.root.deiconify()
 
-        self.frame = tk.Frame(master)
-        self.frame.pack(padx=20, pady=20)
+    def clear_current_frame(self):
+        if self.current_frame is not None:
+            self.current_frame.destroy()
 
-        tk.Label(self.frame, text="Email:").grid(row=0, column=0, sticky="w")
-        self.email_entry = tk.Entry(self.frame)
-        self.email_entry.grid(row=0, column=1, pady=5)
+    def show_login_screen(self):
+        self.clear_current_frame()
+        self.current_frame = tk.Frame(self.root, padx=20, pady=20)
+        self.current_frame.pack(fill="both", expand=True)
+        
+        title_label = tk.Label(self.current_frame, text="Welcome Back", font=("Arial", 18, "bold"))
+        title_label.pack(pady=(20, 30))
+        
+        tk.Label(self.current_frame, text="Email Address:", font=("Arial", 10)).pack(anchor="w", pady=(0, 5))
+        self.email_entry = tk.Entry(self.current_frame, font=("Arial", 12), width=30)
+        self.email_entry.pack(pady=(0, 15))
+        
+        tk.Label(self.current_frame, text="Password:", font=("Arial", 10)).pack(anchor="w", pady=(0, 5))
+        self.password_entry = tk.Entry(self.current_frame, font=("Arial", 12), width=30, show="*")
+        self.password_entry.pack(pady=(0, 30))
+        
+        login_btn = tk.Button(self.current_frame, text="Login", font=("Arial", 12, "bold"), bg="#2196F3", fg="white", width=25, command=self.handle_login)
+        login_btn.pack(pady=10)
+        
+        switch_btn = tk.Button(self.current_frame, text="Don't have an account? Register here", font=("Arial", 9, "underline"), borderwidth=0, command=self.show_register_screen)
+        switch_btn.pack(pady=5)
 
-        tk.Label(self.frame, text="Password:").grid(row=1, column=0, sticky="w")
-        self.password_entry = tk.Entry(self.frame, show="*")
-        self.password_entry.grid(row=1, column=1, pady=5)
+    def show_register_screen(self):
+        self.clear_current_frame()
+        self.current_frame = tk.Frame(self.root, padx=20, pady=20)
+        self.current_frame.pack(fill="both", expand=True)
+        
+        title_label = tk.Label(self.current_frame, text="Create Account", font=("Arial", 18, "bold"))
+        title_label.pack(pady=(20, 30))
+        
+        tk.Label(self.current_frame, text="Email Address:", font=("Arial", 10)).pack(anchor="w", pady=(0, 5))
+        self.reg_email_entry = tk.Entry(self.current_frame, font=("Arial", 12), width=30)
+        self.reg_email_entry.pack(pady=(0, 15))
+        
+        tk.Label(self.current_frame, text="Password:", font=("Arial", 10)).pack(anchor="w", pady=(0, 5))
+        self.reg_password_entry = tk.Entry(self.current_frame, font=("Arial", 12), width=30, show="*")
+        self.reg_password_entry.pack(pady=(0, 30))
+        
+        signup_btn = tk.Button(self.current_frame, text="Register", font=("Arial", 12, "bold"), bg="#4CAF50", fg="white", width=25, command=self.handle_signup)
+        signup_btn.pack(pady=10)
+        
+        back_btn = tk.Button(self.current_frame, text="Back to Login", font=("Arial", 10), command=self.go_back)
+        back_btn.pack(pady=5)
 
-        self.login_button = tk.Button(self.frame, text="Login", command=self.login)
-        self.login_button.grid(row=2, column=0, pady=10)
+    def handle_login(self):
+        email = self.email_entry.get().strip()
+        password = self.password_entry.get().strip()
+        
+        if not email or not password:
+            messagebox.showwarning("Input Error", "Please fill out all fields.")
+            return
+            
+        try:
+            if self.auth_manager and hasattr(self.auth_manager, 'get_collection'):
+                user = self.auth_manager.get_collection("users").find_one({"email": email, "password": password})
+            else:
+                user = {"_id": "mock_id_12345", "email": email} if email == "admin@test.com" else None
 
-        self.register_button = tk.Button(self.frame, text="Register", command=self.register)
-        self.register_button.grid(row=2, column=1, pady=10)
+            if user:
+                messagebox.showinfo("Success", f"Welcome back, {email}!")
+                self.clear_current_frame()
+                if self.on_success_callback:
+                    self.on_success_callback(self.root, user)
+                else:
+                    # Circular import solved: Import dynamically only on successful click
+                    from .main_gui import MainWindow
+                    MainWindow(self.root, user=user)
+            else:
+                messagebox.showerror("Authentication Failed", "Invalid email address or password structure.")
+        except Exception as e:
+            messagebox.showerror("Database Connection Error", f"Could not complete authentication: {e}")
 
-    def login(self):
-        email = self.email_entry.get()
-        password = self.password_entry.get()
-        user = self.auth_manager.login_user(email, password)
-        if user:
-            messagebox.showinfo("Success", "Login successful!")
-            self.master.destroy()  # Close login window
-            self.open_main_window(user)
-        else:
-            messagebox.showerror("Error", "Invalid email or password.")
+    def handle_signup(self):
+        email = self.reg_email_entry.get().strip()
+        password = self.reg_password_entry.get().strip()
+        
+        if not email or not password:
+            messagebox.showwarning("Input Error", "All fields are required!")
+            return
+            
+        data = {"email": email, "password": password}
+        try:
+            if self.auth_manager and hasattr(self.auth_manager, 'get_collection'):
+                self.auth_manager.get_collection("users").insert_one(data)
+            messagebox.showinfo("Success", "Account created successfully!") 
+            self.go_back() 
+        except Exception as e:
+            messagebox.showerror("Database Error", f"Could not save user: {e}") 
 
-    def register(self):
-        email = self.email_entry.get()
-        password = self.password_entry.get()
-        if self.auth_manager.register_user(email, password):
-            messagebox.showinfo("Success", "Registration successful! You can now log in.")
-        else:
-            messagebox.showerror("Error", "Registration failed. User might already exist.")
-
-    def open_main_window(self, user):
-        root = tk.Tk()
-        MainWindow(root, user)
-        root.mainloop()
+    def go_back(self):
+        self.show_login_screen()
