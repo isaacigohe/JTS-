@@ -1,29 +1,37 @@
-import sys
-import os
 import tkinter as tk
+from database.db_manager import DBManager
+from gui.login_gui import LoginWindow
+from gui.main_gui import MainWindow
 
-# --- CRITICAL PATH FIX ---
-# This line finds the folder where main.py is located
-project_root = os.path.dirname(os.path.abspath(__file__))
-# This line tells Python to look in that folder for all imports
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-# -------------------------
-
-# Now we can import our modules safely
-try:
-    from gui.login_gui import LoginWindow
-except ImportError as e:
-    print(f"Import Error: {e}")
-    print(f"Current Path: {sys.path}")
-    sys.exit(1)
+def on_login_success(root, user_data):
+    """
+    Callback function that runs when the user authenticates successfully.
+    It cleans up the login window elements and builds the dashboard.
+    """
+    # Initialize the main dashboard window layout
+    MainWindow(root, user=user_data)
 
 def main():
+    # 1. Initialize the root Tkinter application instance
     root = tk.Tk()
-    root.withdraw()  # Hide the root window initially
-    LoginWindow(root)
+    
+    # Hide the main window frame while things load up
+    root.withdraw()
+    
+    try:
+        # 2. Establish connection to your MongoDB instance
+        auth_manager = DBManager()
+        print("Database connection established successfully.")
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
+        auth_manager = None
+
+    # 3. Initialize the Login Interface window
+    # We pass the root instance, the db wrapper, and our success callback function
+    LoginWindow(root, auth_manager=auth_manager, on_success_callback=on_login_success)
+    
+    # 4. Start the Tkinter application lifecycle loop
     root.mainloop()
 
 if __name__ == "__main__":
     main()
-
