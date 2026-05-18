@@ -27,6 +27,7 @@ class MainWindow:
         control_panel.pack(fill="x", padx=10, pady=10)
         
         tk.Label(control_panel, text=f"Logged in as: {self.user['email']}", font=("Arial", 10, "bold")).pack(side="left")
+        tk.Button(control_panel, text="Logout", fg="red", font=("Arial", 9, "bold"), command=self.logout).pack(side="left", padx=15)
                 
         self.refresh_button = tk.Button(control_panel, text="Refresh Jobs", command=self.refresh_jobs)
         self.refresh_button.pack(side="right", padx=5)
@@ -227,3 +228,13 @@ class MainWindow:
         
         tk.Button(footer, text="Apply Now", bg="#1a73e8", fg="white", font=("Helvetica", 10, "bold"), padx=20, pady=8, relief="flat", cursor="hand2", command=lambda: webbrowser.open(job.get('url', ''))).pack(side="right", padx=5)
         tk.Button(footer, text="Close", font=("Helvetica", 10), padx=20, pady=8, command=details_win.destroy).pack(side="right")
+        
+        def logout(self):
+          if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+            self.master.destroy()  # Destroys main application window safely
+            
+            from gui.login_gui import LoginWindow  # Safe dynamic import
+            
+            new_root = tk.Tk()
+            LoginWindow(new_root)
+            new_root.mainloop()
