@@ -228,9 +228,10 @@ class MainWindow:
         
         tk.Button(footer, text="Apply Now", bg="#1a73e8", fg="white", font=("Helvetica", 10, "bold"), padx=20, pady=8, relief="flat", cursor="hand2", command=lambda: webbrowser.open(job.get('url', ''))).pack(side="right", padx=5)
         tk.Button(footer, text="Close", font=("Helvetica", 10), padx=20, pady=8, command=details_win.destroy).pack(side="right")
-        
-        def logout(self):
-          if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+        tk.Button(footer, text="Close", font=("Helvetica", 10), padx=20, pady=8, command=details_win.destroy).pack(side="right")
+
+    def logout(self):
+        if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
             self.master.destroy()  # Destroys main application window safely
             
             from gui.login_gui import LoginWindow  # Safe dynamic import
