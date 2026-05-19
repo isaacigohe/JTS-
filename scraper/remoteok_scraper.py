@@ -12,6 +12,9 @@ class RemoteOKScraper(BaseScraper):
         try:
             response = requests.get(self.api_url, headers=self.headers, timeout=self.timeout)
             response.raise_for_status()
+            
+            # FORCE standard UTF-8 text encoding to fix the weird 'â' characters
+            response.encoding = 'utf-8'
             data = response.json()
             
             # RemoteOK API returns a list where the first element is legal info
