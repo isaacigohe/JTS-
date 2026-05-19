@@ -38,7 +38,7 @@ python main.py
 JTS offers a secure, authenticated experience where each user maintains their own private list of saved jobs and application statuses.
 
 ### Multi-Source Web Scraping
-The system features a robust scraping engine that concurrently fetches data from top tech job boards including **RemoteOK, Remotive, Dice, Fuzu, and NoDesk**, ensuring a wide variety of opportunities.
+The system features a robust scraping engine that concurrently fetches data from top tech job boards including **RemoteOK, Remotive, Fuzu, and Arbeitnow, ensuring a wide variety of opportunities.
 
 ### Modern GUI Architecture
 Built with Python's **Tkinter**, the interface utilizes a professional "SaaS-style" layout with a dedicated navigation sidebar, clean typography, and a responsive data table for an optimal user experience.
