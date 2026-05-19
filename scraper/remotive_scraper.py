@@ -12,6 +12,9 @@ class RemotiveScraper(BaseScraper):
             params = {"category": category}
             response = requests.get(self.api_url, headers=self.headers, params=params, timeout=self.timeout)
             response.raise_for_status()
+            
+            # FORCE standard UTF-8 text encoding to clear up paragraph symbols
+            response.encoding = 'utf-8'
             data = response.json()
             
             job_listings = data.get("jobs", [])
