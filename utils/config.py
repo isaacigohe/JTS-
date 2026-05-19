@@ -9,3 +9,5 @@ SCRAPER_TIMEOUT = 10
 # API keys (if any, for future use)
 REMOTE_OK_API_KEY = ""
 REMOTIVE_API_KEY = ""
+FUZU_API_KEY = ""
+AEBITNOW_API_KEY = ""
