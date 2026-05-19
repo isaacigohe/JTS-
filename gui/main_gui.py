@@ -1,241 +1,324 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import re, webbrowser
+from bson.objectid import ObjectId
 from database.db_manager import DBManager
 from scraper.remoteok_scraper import RemoteOKScraper
 from scraper.remotive_scraper import RemotiveScraper
-from scraper.dice_scraper import DiceScraper
+from scraper.arbeitnow_scraper import ArbeitnowScraper
 from scraper.fuzu_scraper import FuzuScraper
-from scraper.nodesk_scraper import NoDeskScraper
+# IMPORT OUR BRAND NEW STYLES AND PALETTES
+import gui.styles as theme
+
+def clean_html(raw_html):
+    if not raw_html: return "No description available."
+    # Strip complex structural layout elements smoothly
+    text = re.sub(r'</?(p|br|div|li|h1|h2|h3|ol|ul)>', '\n', raw_html)
+    cleantext = re.sub(r'<.*?>', '', text)
+    for old, new in [('&nbsp;', ' '), ('&amp;', '&'), ('&quot;', '"'), ('â', '—')]:
+        cleantext = cleantext.replace(old, new)
+    return re.sub(r'\n\s*\n+', '\n\n', cleantext).strip()
 
 class MainWindow:
     def __init__(self, master, user):
         self.master = master
-        self.master.title("Job Listing Tracker System (JTS)")
-        self.master.geometry("1000x700")
+        self.master.title("JTS - Job Tracking System")
+        
+        # FIX ISSUE 2 (Screen Size adjustment for visible footer)
+        self.master.geometry("1100x680") 
+        self.master.configure(bg=theme.GREY_BG)
         
         self.user = user
         self.db_manager = DBManager()
         self.jobs_collection = self.db_manager.get_collection("jobs")
         self.saved_jobs_collection = self.db_manager.get_collection("saved_jobs")
         
+        # Trigger Style Configurations
+        theme.apply_global_styles()
         self.setup_ui()
         self.load_jobs()
 
     def setup_ui(self):
-        # Top Control Panel
-        control_panel = tk.Frame(self.master)
-        control_panel.pack(fill="x", padx=10, pady=10)
-        
-        tk.Label(control_panel, text=f"Logged in as: {self.user['email']}", font=("Arial", 10, "bold")).pack(side="left")
-        tk.Button(control_panel, text="Logout", fg="red", font=("Arial", 9, "bold"), command=self.logout).pack(side="left", padx=15)
-                
-        self.refresh_button = tk.Button(control_panel, text="Refresh Jobs", command=self.refresh_jobs)
-        self.refresh_button.pack(side="right", padx=5)
-        
-        self.search_entry = tk.Entry(control_panel)
-        self.search_entry.pack(side="right", padx=5)
-        
-        tk.Button(control_panel, text="Search", command=self.search_jobs).pack(side="right")
+        # 1. Executive Top Header Banner Block
+        header_frame = tk.Frame(self.master, bg=theme.NAVY, height=70)
+        header_frame.pack(fill="x", side="top")
 
-    # Main Content Area (Treeview)
-        self.tree = ttk.Treeview(self.master, columns=("Title", "Company", "Location", "Source", "Status"), show="headings")
-        self.tree.heading("Title", text="Job Title")
-        self.tree.heading("Company", text="Company")
-        self.tree.heading("Location", text="Location")
-        self.tree.heading("Source", text="Source")
-        self.tree.heading("Status", text="Status")
-                
-        self.tree.column("Title", width=300)
-        self.tree.column("Company", width=200)
-        self.tree.column("Location", width=150)
-        self.tree.column("Source", width=100)
-        self.tree.column("Status", width=100)
-                
-        self.tree.pack(fill="both", expand=True, padx=10, pady=10)
+        tk.Label(header_frame, text="JTS | JOB TRACKER", font=("Helvetica", 16, "bold"), bg=theme.NAVY, fg=theme.WHITE, padx=20).pack(side="left", pady=15)
+
+        user_info = tk.Frame(header_frame, bg=theme.NAVY)
+        user_info.pack(side="right", padx=20)
+        tk.Label(user_info, text=f"👤 {self.user['email']}", font=("Arial", 10), bg=theme.NAVY, fg=theme.GREY_BG).pack(side="top", anchor="e")
+        theme.create_btn(user_info, "Logout", self.logout, role="danger").pack(side="top", anchor="e", pady=2)
+
+        # 2. Search / Action Interactivity Bar Area
+        action_bar = tk.Frame(self.master, bg=theme.WHITE, pady=10, padx=20)
+        action_bar.pack(fill="x")
+
+        search_frame = tk.Frame(action_bar, bg=theme.WHITE)
+        search_frame.pack(side="left")
+        tk.Label(search_frame, text="Search Jobs:", font=("Arial", 10), bg=theme.WHITE, fg=theme.TEXT_MAIN).pack(side="left")
+        
+        self.search_entry = theme.create_input(search_frame, width=32)
+        self.search_entry.pack(side="left", padx=10)
+        theme.create_btn(search_frame, "Search", self.search_jobs).pack(side="left")
+
+        theme.create_btn(action_bar, " Refresh Database", self.refresh_jobs, role="refresh").pack(side="right")
+
+        # 3. Main Data Core Presentation Grid View Table (Treeview)
+        # Compacted vertical padding from 20 to 10 to keep components inside standard layouts
+        table_container = tk.Frame(self.master, bg=theme.GREY_BG, padx=20, pady=10)
+        table_container.pack(fill="both", expand=True)
+
+        cols = ("Title", "Company", "Location", "Source", "Status")
+        self.tree = ttk.Treeview(table_container, columns=cols, show="headings", selectmode="browse")
+        
+        widths = {"Title": 350, "Company": 180, "Location": 150, "Source": 110, "Status": 110}
+        for c in cols:
+            self.tree.heading(c, text=c.upper())
+            self.tree.column(c, width=widths[c], anchor="center")
+        self.tree.column("Title", anchor="w") 
+        
+        self.tree.pack(fill="both", expand=True)
         self.tree.bind("<Double-1>", self.on_item_double_click)
 
-        # Bottom Action Panel
-        action_panel = tk.Frame(self.master)
-        action_panel.pack(fill="x", padx=10, pady=10)
+        # 4. Lower Profile Data Commands Panel (Compact structure layout padding)
+        footer = tk.Frame(self.master, bg=theme.WHITE, pady=10, padx=20)
+        footer.pack(fill="x", side="bottom")
         
-        tk.Button(action_panel, text="Save Job", command=self.save_job).pack(side="left", padx=5)
-        tk.Button(action_panel, text="View Saved Jobs", command=self.view_saved_jobs).pack(side="left", padx=5)
-        tk.Button(action_panel, text="Update Status", command=self.update_status).pack(side="left", padx=5)
-        tk.Button(action_panel, text="Delete Saved Job", command=self.delete_saved_job).pack(side="left", padx=5)
+        theme.create_btn(footer, "Save Job", self.save_job).pack(side="left", padx=(0, 15))
+        theme.create_btn(footer, "View Saved Jobs", self.view_saved_jobs).pack(side="left", padx=15)
+        theme.create_btn(footer, "Update Status", self.update_status).pack(side="left", padx=15)
+        theme.create_btn(footer, "Remove Saved Job", self.delete_saved_job, role="secondary").pack(side="left", padx=15)
 
     def load_jobs(self, query=None):
-        for item in self.tree.get_children():
+        for item in self.tree.get_children(): 
             self.tree.delete(item)
-                
-        if query:
-            jobs = self.jobs_collection.find(query)
-        else:
-            jobs = self.jobs_collection.find().limit(100)
             
+        jobs = self.jobs_collection.find(query) if query else self.jobs_collection.find().limit(100)
+        
         for job in jobs:
-            self.tree.insert("", "end", iid=str(job["_id"]), values=(
-                job.get("title"),
-                job.get("company"),
-                job.get("location"),
-                job.get("source"),
-                "Available"
-            ))
-
-    def refresh_jobs(self):
-        messagebox.showinfo("Info", "Scraping new jobs from multiple sources... Please wait.")
-        scrapers = [
-            RemoteOKScraper(), 
-            RemotiveScraper(),
-            DiceScraper(),
-            FuzuScraper(),
-            NoDeskScraper()
-        ]
-        all_jobs = []
-        for s in scrapers:
-            try:
-                jobs = s.scrape_jobs()
-                all_jobs.extend(jobs)
-            except Exception as e:
-                print(f"Error with {s.__class__.__name__}: {e}")
+            if "_id" in job:
+                rid = str(job["_id"])
+            else:
+                rid = str(job.get("job_id", job.get("url", "unknown_id")))
                 
+            # PERSISTENT CROSS-REFERENCE CHECK:
+            # Check if this logged-in user has saved or applied to this job in 'saved_jobs'
+            user_interaction = self.saved_jobs_collection.find_one({
+                "user_id": self.user["_id"], 
+                "job_id": rid
+            })
+            
+            # If a record exists in MongoDB, read its status. Otherwise, show "Available"
+            display_status = user_interaction["status"] if user_interaction else "Available"
+                
+            self.tree.insert("", "end", iid=rid, values=(
+                job.get("title", "Untitled"), 
+                job.get("company", "Unknown"),
+                job.get("location", "Remote"), 
+                job.get("source", "Unknown"), 
+                display_status  # Displays the true persistent state from MongoDB!
+            ))
+    def refresh_jobs(self):
+        messagebox.showinfo("JTS", "Connecting to live servers and updating database...")
+        
+        # Initialize your list of scrapers
+        scrapers = [RemoteOKScraper(), RemotiveScraper(), ArbeitnowScraper(), FuzuScraper()]
+        all_jobs = []
+        
+        # Run each scraper separately so if one fails, the others still work!
+        for s in scrapers:
+            try: 
+                scraped_data = s.scrape_jobs()
+                if scraped_data:
+                    all_jobs.extend(scraped_data)
+                    print(f"[Sync] {s.__class__.__name__} successfully pulled {len(scraped_data)} items.")
+            except Exception as e: 
+                print(f"[Sync Error] Failed running {s.__class__.__name__}: {e}")
+                
+        # CONSTANT STORAGE VERIFICATION ENGINE
         if all_jobs:
-            self.jobs_collection.delete_many({})
-            self.jobs_collection.insert_many(all_jobs)
-            self.load_jobs()
-            messagebox.showinfo("Success", f"Scraped {len(all_jobs)} jobs from multiple sources successfully!")
+            try:
+                # 1. Clear out old temporary cache records safely
+                self.jobs_collection.delete_many({})
+                
+                # 2. Clean out any potential hardcoded '_id' fields that cause MongoDB crashes
+                for job in all_jobs:
+                    if '_id' in job:
+                        del job['_id']  # Let MongoDB generate a clean, fresh, permanent unique ID
+                
+                # 3. Execute bulk write operation into MongoDB 'jobs' collection
+                result = self.jobs_collection.insert_many(all_jobs)
+                
+                # Verify insertion count right in your terminal console
+                print(f"[Database Persistence] Successfully stored {len(result.inserted_ids)} records into MongoDB!")
+                
+                # 4. Reload the treeview layout visually
+                self.load_jobs()
+                messagebox.showinfo("Success", f"Database Synchronized! Permanent records stored: {len(result.inserted_ids)}")
+                
+            except Exception as e:
+                print(f"[Database Drop Error] Critical write block: {e}")
+                messagebox.showerror("Database Write Error", f"Could not store records to MongoDB jobs collection: {e}")
         else:
-            messagebox.showwarning("Warning", "No jobs found or error during scraping.")
-
+            messagebox.showwarning("Sync Warning", "Scrapers returned 0 active listings. Check internet connection or terminal logs.")
     def search_jobs(self):
-        keyword = self.search_entry.get()
-        if keyword:
-            query = {"$or": [
-                {"title": {"$regex": keyword, "$options": "i"}},
-                {"company": {"$regex": keyword, "$options": "i"}},
-                {"description": {"$regex": keyword, "$options": "i"}}
-            ]}
-            self.load_jobs(query)
-        else:
+        # FIX ISSUE 2 (Dynamic Search matching all fields)
+        k = self.search_entry.get().strip()
+        if k: 
+            self.load_jobs({"$or": [
+                {"title": {"$regex": k, "$options": "i"}}, 
+                {"company": {"$regex": k, "$options": "i"}},
+                {"source": {"$regex": k, "$options": "i"}},
+                {"location": {"$regex": k, "$options": "i"}}
+            ]})
+        else: 
             self.load_jobs()
 
     def save_job(self):
-        selected_item = self.tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Warning", "Please select a job to save.")
-            return
-                
-        job_id = selected_item[0]
-        if self.saved_jobs_collection.find_one({"user_id": self.user["_id"], "job_id": job_id}):
-            messagebox.showinfo("Info", "Job already saved.")
+        sel = self.tree.selection()
+        if not sel: 
+            messagebox.showwarning("Selection Error", "Please select a job from the list first.")
             return
             
-        self.saved_jobs_collection.insert_one({
-            "user_id": self.user["_id"],
-            "job_id": job_id,
-            "status": "Saved"
-        })
-        messagebox.showinfo("Success", "Job saved successfully!")
-
-    def view_saved_jobs(self):
-        saved_relations = self.saved_jobs_collection.find({"user_id": self.user["_id"]})
-        saved_ids = [r["job_id"] for r in saved_relations]
-                
-        from bson.objectid import ObjectId
-        query = {"_id": {"$in": [ObjectId(sid) for sid in saved_ids]}}
-        self.load_jobs(query)
+        jid = sel[0]  # Get the unique ID (MongoDB ObjectId string)
         
+        # Check if this user has already interacting with this job document
+        existing = self.saved_jobs_collection.find_one({"user_id": self.user["_id"], "job_id": jid})
+        
+        if existing:
+            messagebox.showinfo("JTS Profile", "This job is already saved or tracked in your profile!")
+            return
+            
+        # Permanent Write Operation directly to MongoDB saved_jobs collection
+        tracking_data = {
+            "user_id": self.user["_id"], 
+            "job_id": jid, 
+            "status": "Saved"
+        }
+        
+        self.saved_jobs_collection.insert_one(tracking_data)
+        
+        # Visually update the status in your UI table immediately
+        self.tree.set(jid, "Status", "Saved")
+        messagebox.showinfo("Success", "Job permanently logged into your MongoDB 'saved_jobs' collection!")
+    def view_saved_jobs(self):
+        saved = [r["job_id"] for r in self.saved_jobs_collection.find({"user_id": self.user["_id"]})]
+        obj_ids = []
+        for s in saved:
+            try: obj_ids.append(ObjectId(s))
+            except: pass
+        self.load_jobs({"$or": [{"_id": {"$in": obj_ids}}, {"job_id": {"$in": saved}}]})
         for item in self.tree.get_children():
             rel = self.saved_jobs_collection.find_one({"user_id": self.user["_id"], "job_id": item})
-            if rel:
-                self.tree.set(item, "Status", rel["status"])
+            if rel: self.tree.set(item, "Status", rel["status"])
 
     def update_status(self):
-        selected_item = self.tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Warning", "Please select a saved job.")
-            return
-                
-        job_id = selected_item[0]
-        rel = self.saved_jobs_collection.find_one({"user_id": self.user["_id"], "job_id": job_id})
-        if not rel:
-            messagebox.showwarning("Warning", "This job is not in your saved list.")
-            return
-            
-        new_status = "Applied" if rel["status"] == "Saved" else "Saved"
-        self.saved_jobs_collection.update_one(
-            {"_id": rel["_id"]},
-            {"$set": {"status": new_status}}
-        )
-        self.tree.set(job_id, "Status", new_status)
+        sel = self.tree.selection()
+        if not sel: return
+        jid = sel[0]
+        rel = self.saved_jobs_collection.find_one({"user_id": self.user["_id"], "job_id": jid})
+        if not rel: return
+        new = "Applied" if rel["status"] == "Saved" else "Saved"
+        self.saved_jobs_collection.update_one({"_id": rel["_id"]}, {"$set": {"status": new}})
+        self.tree.set(jid, "Status", new)
 
     def delete_saved_job(self):
-        selected_item = self.tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Warning", "Please select a job to remove.")
-            return
-                
-        job_id = selected_item[0]
-        self.saved_jobs_collection.delete_one({"user_id": self.user["_id"], "job_id": job_id})
-        self.tree.delete(job_id)
-        messagebox.showinfo("Success", "Job removed from saved list.")
+        sel = self.tree.selection()
+        if not sel: return
+        jid = sel[0]
+        self.saved_jobs_collection.delete_one({"user_id": self.user["_id"], "job_id": jid})
+        self.tree.delete(jid)
 
     def on_item_double_click(self, event):
-        selected_item = self.tree.selection()
-        if selected_item:
-            job_id = selected_item[0]
-            from bson.objectid import ObjectId
-            job = self.jobs_collection.find_one({"_id": ObjectId(job_id)})
-            if job:
+        sel = self.tree.selection()
+        if sel:
+            jid = sel[0]
+            job = None
+            
+            # Try finding the document by its native MongoDB object ID first
+            try:
+                if len(jid) == 24:
+                    job = self.jobs_collection.find_one({"_id": ObjectId(jid)})
+            except:
+                pass
+                
+            # Fallback fallback search matrix check if it wasn't a standard ObjectId
+            if not job:
+                job = self.jobs_collection.find_one({"$or": [
+                    {"job_id": jid},
+                    {"url": jid}
+                ]})
+                
+            if job: 
                 self.show_details(job)
 
     def show_details(self, job):
-        import webbrowser
-        import re
-        def clean_html(raw_html):
-            if not raw_html: return "No description available."
-            cleanr = re.compile('<.*?>')
-            cleantext = re.sub(cleanr, '', raw_html)
-            cleantext = cleantext.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&quot;', '"')
-            return cleantext.strip()
+        win = tk.Toplevel(self.master)
+        win.title("Job Details")
+        win.geometry("650x550")
+        win.configure(bg=theme.WHITE)
+        
+        # 1. TOP HEADER
+        h = tk.Frame(win, bg=theme.NAVY, pady=15, padx=20)
+        h.pack(fill="x", side="top")
+        tk.Label(h, text=job.get('title', 'Untitled'), font=("Helvetica", 13, "bold"), bg=theme.NAVY, fg=theme.WHITE, wraplength=600).pack(anchor="w")
+        tk.Label(h, text=f" {job.get('company', 'Unknown')}  |   {job.get('location', 'Remote')}", bg=theme.NAVY, fg=theme.GREY_BG, font=("Arial", 10)).pack(anchor="w", pady=(5, 0))
+        
+        # 2. DESIGNED FOOTER BUTTON BAR
+        apply_footer = tk.Frame(win, bg=theme.GREY_BG, pady=12, padx=20)
+        apply_footer.pack(fill="x", side="bottom")
+        
+        url = job.get('url') or job.get('link') or job.get('apply_url')
+        jid = str(job.get("_id")) # Get the underlying ID string to update collections
+        
+        # This function runs when you click "Apply Now"
+        def execute_application(target_url, job_id):
+            # 1. Open the live application page in your web browser
+            webbrowser.open(target_url)
             
-        details_win = tk.Toplevel(self.master)
-        details_win.title(f"Job Details - {job['company']}")
-        details_win.geometry("700x600")
-        details_win.configure(bg="#f0f2f5")
-        
-        header = tk.Frame(details_win, bg="#ffffff", padx=20, pady=20)
-        header.pack(fill="x")
-        tk.Label(header, text=job['title'], font=("Helvetica", 18, "bold"), bg="#ffffff", fg="#1a73e8", wraplength=650, justify="left").pack(anchor="w")
-        tk.Label(header, text=job['company'], font=("Helvetica", 14), bg="#ffffff", fg="#5f6368").pack(anchor="w", pady=(5, 0))
-                
-        info_bar = tk.Frame(header, bg="#ffffff", pady=10)
-        info_bar.pack(fill="x")
-                
-        tk.Label(info_bar, text=f"📍 {job['location']}", font=("Helvetica", 10), bg="#ffffff", fg="#3c4043").pack(side="left", padx=(0, 20))
-        tk.Label(info_bar, text=f"💰 {job.get('salary', 'Not specified')}", font=("Helvetica", 10), bg="#ffffff", fg="#3c4043").pack(side="left")
-        
-        content_frame = tk.Frame(details_win, bg="#f0f2f5", padx=20, pady=20)
-        content_frame.pack(fill="both", expand=True)
-        tk.Label(content_frame, text="Job Description", font=("Helvetica", 12, "bold"), bg="#f0f2f5", fg="#202124").pack(anchor="w", pady=(0, 10))
-        
-        desc_text = tk.Text(content_frame, wrap="word", font=("Helvetica", 11), bg="#ffffff", padx=15, pady=15, relief="flat")
-        desc_text.insert("1.0", clean_html(job.get("description", "")))
-        desc_text.config(state="disabled")
-        desc_text.pack(fill="both", expand=True)
-        
-        footer = tk.Frame(details_win, bg="#ffffff", padx=20, pady=15)
-        footer.pack(fill="x")
-        
-        tk.Button(footer, text="Apply Now", bg="#1a73e8", fg="white", font=("Helvetica", 10, "bold"), padx=20, pady=8, relief="flat", cursor="hand2", command=lambda: webbrowser.open(job.get('url', ''))).pack(side="right", padx=5)
-        tk.Button(footer, text="Close", font=("Helvetica", 10), padx=20, pady=8, command=details_win.destroy).pack(side="right")
-        tk.Button(footer, text="Close", font=("Helvetica", 10), padx=20, pady=8, command=details_win.destroy).pack(side="right")
+            # 2. FORCE MONGODB TO PERMANENTLY UPDATE THE 'jobs' COLLECTION
+            try:
+                # Find the job by its ObjectId and add/change a 'status' field to 'Applied'
+                if len(job_id) == 24:
+                    self.jobs_collection.update_one(
+                        {"_id": ObjectId(job_id)},
+                        {"$set": {"status": "Applied"}}
+                    )
+                    print(f"[MongoDB Update] Successfully updated status to 'Applied' inside 'jobs' collection for ID: {job_id}")
+            except Exception as e:
+                print(f"[MongoDB Error] Failed to update 'jobs' collection: {e}")
+            
+            # 3. Update the UI table visually right away
+            try:
+                self.tree.set(job_id, "Status", "Applied")
+            except:
+                pass
+            print(f"[Database] Job {job_id} successfully stored as 'Applied' for User {self.user['_id']}.")
 
+        # --- ALIGNED TO THE RIGHT ---
+        btn_cancel = theme.create_btn(apply_footer, "Cancel", win.destroy, role="danger")
+        btn_cancel.pack(side="right", padx=(10, 0))
+        
+        if url:
+            # Trigger our inline DB logging function right when they hit Apply Now!
+            btn_apply = theme.create_btn(apply_footer, "Apply Now", lambda: execute_application(url, jid), role="primary")
+            btn_apply.pack(side="right")
+        else:
+            lbl_no_link = tk.Label(apply_footer, text="⚠️ No application URL provided", fg=theme.TEXT_MUTED, bg=theme.GREY_BG, font=("Arial", 10, "italic"))
+            lbl_no_link.pack(side="right")
+
+        # 3. CENTER CONTENT - Description Text Area
+        t = tk.Text(win, font=("Arial", 10), padx=15, pady=15, wrap="word", bg=theme.WHITE, fg=theme.TEXT_MAIN, relief="flat")
+        t.insert("1.0", clean_html(job.get("description", "")))
+        t.config(state="disabled")
+        t.pack(fill="both", expand=True) 
     def logout(self):
-        if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
-            self.master.destroy()  # Destroys main application window safely
-            
-            from gui.login_gui import LoginWindow  # Safe dynamic import
-            
-            new_root = tk.Tk()
-            LoginWindow(new_root)
-            new_root.mainloop()
+        self.master.destroy()
+        from gui.login_gui import LoginWindow
+        root = tk.Tk()
+        
+        # Make sure to pass your active DBManager class here as well
+        from database.db_manager import DBManager
+        LoginWindow(root, auth_manager=DBManager())
+        root.mainloop()
