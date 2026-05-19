@@ -11,7 +11,7 @@ Follow these steps to set up and run the project locally:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/IsaacIgohe/jts_project.git
+git clone https://github.com/IsaacIgohe/JTS-
 cd jts_project
 ```
 
