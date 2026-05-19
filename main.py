@@ -34,4 +34,12 @@ def main():
     root.mainloop()
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    
+    # 1. Initialize your DB manager instance at startup
+    db_server = DBManager() 
+    
+    # 2. Pass it directly into auth_manager so signup/login can use it!
+    app = LoginWindow(root, auth_manager=db_server)
+    
+    root.mainloop()
